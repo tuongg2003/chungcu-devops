@@ -1,0 +1,119 @@
+# =====================================================================
+#  Core: ung dung + PostgreSQL + pgAdmin + Nginx reverse proxy
+#  Cac file docker-compose.monitoring.yml / docker-compose.logging.yml
+#  se duoc gop them qua bien COMPOSE_FILE trong .env
+# =====================================================================
+name: chungcu
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  # ---------------- PostgreSQL ----------------
+  db:
+    <<: *hardening
+    image: postgres:16-alpine
+    container_name: cc_db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${POSTGRES_SUPER_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPER_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      EXPORTER_DB_PASSWORD: ${EXPORTER_DB_PASSWORD}
+    command: >
+      postgres
+      -c log_connections=on
+      -c log_disconnections=on
+      -c log_min_duration_statement=500
+      -c log_line_prefix='%t [%p] %u@%d '
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks: [backend]            # KHONG publish cong ra host
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPER_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------------- Ung dung web (Node.js) ----------------
+  app:
+    <<: *hardening
+    build: ./app
+    image: chungcu-app:1.0
+    container_name: cc_app
+    environment:
+      NODE_ENV: production
+      DB_HOST: db
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${APP_DB_USER}
+      DB_PASSWORD: ${APP_DB_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [backend, monitoring]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    pids_limit: 200
+
+  # ---------------- pgAdmin ----------------
+  pgadmin:
+    <<: *hardening
+    image: dpage/pgadmin4:8.12
+    container_name: cc_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_LISTEN_PORT: 8081
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    ports:
+      - "${ADMIN_BIND:-127.0.0.1}:5050:8081"     # chi mo tren localhost
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [frontend, backend]
+    cap_drop: [ALL]
+
+  # ---------------- Nginx reverse proxy ----------------
+  nginx:
+    <<: *hardening
+    image: nginxinc/nginx-unprivileged:1.27-alpine    # chay non-root (uid 101)
+    container_name: cc_nginx
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/proxy_params.conf:/etc/nginx/proxy_params.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      app: { condition: service_healthy }
+    networks: [frontend, backend, monitoring]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    mem_limit: 256m
+
+# ---------------- Network isolation ----------------
+networks:
+  frontend:                  # tiep xuc nguoi dung / host
+  backend:                   # app <-> db (khong ra Internet)
+    internal: true
+  monitoring:                # giam sat + log (khong ra Internet)
+    internal: true
+
+volumes:
+  pgdata:
+  pgadmin_data:

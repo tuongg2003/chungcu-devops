@@ -1,0 +1,29 @@
+<%- include('partials/header') %>
+<div class="card narrow">
+  <h1><%= row.id ? 'Sửa' : 'Thêm' %> <%= ent.title.toLowerCase() %></h1>
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="<%= action %>">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <% ent.fields.forEach(function(f){
+         var v = row[f.name];
+         if (v instanceof Date) v = v.toISOString().slice(0, 10);
+         if (v === null || v === undefined) v = '';
+    %>
+      <label><%= f.label %><%= f.required ? ' *' : '' %>
+      <% if (f.type === 'textarea') { %>
+        <textarea name="<%= f.name %>" rows="4"><%= v %></textarea>
+      <% } else if (f.type === 'select') { %>
+        <select name="<%= f.name %>"><% f.options.forEach(function(o){ %><option value="<%= o %>" <%= String(v) === o ? 'selected' : '' %>><%= o %></option><% }) %></select>
+      <% } else if (f.type === 'bool') { %>
+        <select name="<%= f.name %>"><option value="false" <%= String(v) !== 'true' ? 'selected' : '' %>>Không</option><option value="true" <%= String(v) === 'true' ? 'selected' : '' %>>Có</option></select>
+      <% } else if (f.type === 'ref') { %>
+        <select name="<%= f.name %>"><option value="">-- chọn --</option><% refs[f.name].forEach(function(o){ %><option value="<%= o.id %>" <%= String(v) === String(o.id) ? 'selected' : '' %>><%= o.label %></option><% }) %></select>
+      <% } else { %>
+        <input name="<%= f.name %>" type="<%= f.type === 'number' ? 'number' : (f.type === 'date' ? 'date' : 'text') %>" step="any" value="<%= v %>">
+      <% } %>
+      </label>
+    <% }) %>
+    <button class="btn">Lưu</button> <a class="btn small" href="/<%= name %>">Hủy</a>
+  </form>
+</div>
+<%- include('partials/footer') %>

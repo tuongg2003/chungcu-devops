@@ -1,0 +1,15 @@
+<%- include('partials/header') %>
+<h1>Tổng quan</h1>
+<div class="grid">
+  <div class="card stat"><span><%= s.apartments %></span>Căn hộ</div>
+  <div class="card stat"><span><%= s.residents %></span>Cư dân</div>
+  <div class="card stat"><span><%= s.unpaid %></span>Khoản phí chưa thu</div>
+  <div class="card stat"><span><%= Number(s.unpaid_amount).toLocaleString('vi-VN') %></span>VNĐ còn phải thu</div>
+  <div class="card stat"><span><%= s.open_complaints %></span>Khiếu nại đang mở</div>
+</div>
+<h2>Thông báo mới nhất</h2>
+<ul class="card">
+  <% notices.forEach(function(n){ %><li><%= n.title %> <small>(<%= new Date(n.created_at).toLocaleDateString('vi-VN') %>)</small></li><% }) %>
+  <% if (!notices.length) { %><li>Chưa có thông báo</li><% } %>
+</ul>
+<%- include('partials/footer') %>

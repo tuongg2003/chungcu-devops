@@ -1,0 +1,43 @@
+<%- include('partials/header') %>
+<div class="bar">
+  <h1><%= ent.title %></h1>
+  <form method="get" class="inline">
+    <input name="q" value="<%= q %>" placeholder="Tìm kiếm...">
+    <button class="btn small">Tìm</button>
+  </form>
+  <a class="btn" href="/<%= name %>/new">+ Thêm mới</a>
+</div>
+<table>
+  <thead><tr><th>#</th><% ent.fields.forEach(function(f){ %><th><%= f.label %></th><% }) %><th></th></tr></thead>
+  <tbody>
+  <% rows.forEach(function(r){ %>
+    <tr>
+      <td><%= r.id %></td>
+      <% ent.fields.forEach(function(f){
+           var v = r[f.name];
+           if (f.type === 'ref') v = r[f.name + '_label'];
+           else if (f.type === 'bool') v = v ? 'Có' : 'Không';
+           else if (v instanceof Date) v = v.toISOString().slice(0, 10);
+           else if (f.type === 'number' && v !== null && v !== undefined) v = Number(v).toLocaleString('vi-VN');
+      %>
+        <td><% if (f.type === 'select') { %><span class="tag t-<%= v %>"><%= v %></span><% } else { %><%= v === null || v === undefined ? '' : v %><% } %></td>
+      <% }) %>
+      <td class="acts">
+        <% (ent.actions || []).forEach(function(a){
+             var show = !a.showWhen || Object.keys(a.showWhen).every(function(k){ return [].concat(a.showWhen[k]).indexOf(r[k]) >= 0; });
+             if (show) { %>
+          <form method="post" action="/<%= name %>/<%= r.id %>/action/<%= a.name %>" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn small ok"><%= a.label %></button>
+          </form>
+        <% } }) %>
+        <a class="btn small" href="/<%= name %>/<%= r.id %>/edit">Sửa</a>
+        <form method="post" action="/<%= name %>/<%= r.id %>/delete" class="inline">
+          <input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn small danger">Xóa</button>
+        </form>
+      </td>
+    </tr>
+  <% }) %>
+  <% if (!rows.length) { %><tr><td colspan="<%= ent.fields.length + 2 %>">Không có dữ liệu</td></tr><% } %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

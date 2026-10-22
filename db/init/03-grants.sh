@@ -1,0 +1,13 @@
+#!/bin/sh
+# Phan quyen: user ung dung chi duoc DML, khong DDL, khong superuser
+set -e
+psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<EOSQL
+REVOKE ALL ON DATABASE ${POSTGRES_DB} FROM PUBLIC;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT CONNECT ON DATABASE ${POSTGRES_DB} TO ${APP_DB_USER}, exporter;
+GRANT USAGE ON SCHEMA public TO ${APP_DB_USER};
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${APP_DB_USER};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${APP_DB_USER};
+-- bang users: app chi duoc doc va them (khong sua/xoa tai khoan)
+REVOKE UPDATE, DELETE ON users FROM ${APP_DB_USER};
+EOSQL
