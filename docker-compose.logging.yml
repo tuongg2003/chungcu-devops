@@ -1,0 +1,39 @@
+# Log tap trung: Promtail (thu thap log Docker) -> Loki (luu tru) -> Grafana (truy van LogQL)
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  loki:
+    <<: *hardening
+    image: grafana/loki:3.2.0
+    container_name: cc_loki
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    networks: [monitoring]         # khong publish cong; chi Grafana/Promtail truy cap noi bo
+    cap_drop: [ALL]
+
+  promtail:
+    <<: *hardening
+    image: grafana/promtail:3.2.0
+    container_name: cc_promtail
+    command: ["-config.file=/etc/promtail/promtail-config.yaml"]
+    volumes:
+      - ./promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - promtail_data:/promtail
+      - /var/run/docker.sock:/var/run/docker.sock:ro     # chi doc, de tim container
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on: [loki]
+    networks: [monitoring]
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
+
+  grafana:                          # bo sung phu thuoc: Grafana cho Loki khoi dong truoc
+    depends_on: [loki]
+
+volumes:
+  loki_data:
+  promtail_data:
