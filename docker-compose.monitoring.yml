@@ -1,0 +1,90 @@
+# Giam sat: Prometheus + Grafana + cAdvisor + node-exporter + postgres-exporter + nginx-exporter
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  prometheus:
+    <<: *hardening
+    image: prom/prometheus:v2.54.1
+    container_name: cc_prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${ADMIN_BIND:-127.0.0.1}:9090:9090"
+    networks: [monitoring, frontend]
+    cap_drop: [ALL]
+
+  grafana:
+    <<: *hardening
+    image: grafana/grafana:11.2.0
+    container_name: cc_grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${ADMIN_BIND:-127.0.0.1}:3000:3000"
+    depends_on: [prometheus]
+    networks: [frontend, monitoring]
+    cap_drop: [ALL]
+
+  cadvisor:                       # metrics cua tung container
+    <<: *hardening
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cc_cadvisor
+    command: ["--docker_only=true", "--housekeeping_interval=15s"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [monitoring]
+
+  node-exporter:                  # metrics cua may chu (CPU, RAM, disk)
+    <<: *hardening
+    image: prom/node-exporter:v1.8.2
+    container_name: cc_node_exporter
+    command: ["--path.rootfs=/host"]
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks: [monitoring]
+    cap_drop: [ALL]
+
+  postgres-exporter:              # metrics cua PostgreSQL (user 'exporter' chi co role pg_monitor)
+    <<: *hardening
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: cc_pg_exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://exporter:${EXPORTER_DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [backend, monitoring]
+    cap_drop: [ALL]
+
+  nginx-exporter:                 # metrics cua Nginx qua stub_status
+    <<: *hardening
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    container_name: cc_nginx_exporter
+    command: ["--nginx.scrape-uri=http://nginx:8081/stub_status"]
+    depends_on: [nginx]
+    networks: [monitoring]
+    cap_drop: [ALL]
+
+volumes:
+  prometheus_data:
+  grafana_data:
