@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Kiem tra nhanh cac bien phap hardening - dung khi demo
-cd "$(dirname "$0")/.."
-echo "=== 1. User chay trong tung container (khong duoc la root) ==="
+echo "=== 1. User cua tien trinh chinh ==="
 for c in cc_app cc_nginx cc_db cc_pgadmin cc_prometheus cc_grafana cc_loki; do
-  printf "%-16s -> %s\n" "$c" "$(docker exec $c id 2>/dev/null | cut -d' ' -f1)"
+  printf "%-16s -> " "$c"
+  docker exec "$c" sh -c 'grep "^Uid:" /proc/1/status 2>/dev/null' \
+    2>/dev/null || echo "khong kiem tra duoc"
 done
 echo; echo "=== 2. Cong duoc publish ra host ==="
 docker ps --format '{{.Names}}\t{{.Ports}}' | grep '^cc_'
@@ -13,9 +14,10 @@ for n in frontend backend monitoring; do
 done
 echo; echo "=== 4. DB khong publish cong 5432 ra host ==="
 (ss -tln 2>/dev/null | grep -q ':5432 ') && echo "CANH BAO: 5432 dang mo" || echo "OK: 5432 khong mo tren host"
-echo; echo "=== 5. Quyen cua user ung dung trong PostgreSQL ==="
-source .env
-docker exec cc_db psql -U "$POSTGRES_SUPER_USER" -d "$DB_NAME" -c "\du"
+echo
+echo "=== 5. Quyen cua user ung dung trong PostgreSQL ==="
+docker exec cc_db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\du"'
 echo; echo "=== 6. Security headers cua Nginx ==="
 curl -skI https://localhost | grep -iE 'strict-transport|x-frame|x-content-type|content-security|referrer|permissions|server'
 echo; echo "=== 7. /metrics khong lo ra ngoai ==="

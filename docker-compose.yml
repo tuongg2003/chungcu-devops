@@ -67,7 +67,7 @@ services:
 
   # ---------------- pgAdmin ----------------
   pgadmin:
-    <<: *hardening
+    restart: unless-stopped
     image: dpage/pgadmin4:8.12
     container_name: cc_pgadmin
     environment:
@@ -80,11 +80,13 @@ services:
       - pgadmin_data:/var/lib/pgadmin
       - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
     ports:
-      - "${ADMIN_BIND:-127.0.0.1}:5050:8081"     # chi mo tren localhost
+      - "${ADMIN_BIND:-127.0.0.1}:5050:8081"
     depends_on:
-      db: { condition: service_healthy }
-    networks: [frontend, backend]
-    cap_drop: [ALL]
+      db:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
 
   # ---------------- Nginx reverse proxy ----------------
   nginx:

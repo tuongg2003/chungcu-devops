@@ -16,24 +16,30 @@ services:
     networks: [monitoring]         # khong publish cong; chi Grafana/Promtail truy cap noi bo
     cap_drop: [ALL]
 
-  promtail:
-    <<: *hardening
-    image: grafana/promtail:3.2.0
-    container_name: cc_promtail
-    command: ["-config.file=/etc/promtail/promtail-config.yaml"]
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: cc_alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
     volumes:
-      - ./promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
-      - promtail_data:/promtail
-      - /var/run/docker.sock:/var/run/docker.sock:ro     # chi doc, de tim container
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    depends_on: [loki]
-    networks: [monitoring]
-    cap_drop: [ALL]
-    cap_add: [DAC_READ_SEARCH]
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
 
   grafana:                          # bo sung phu thuoc: Grafana cho Loki khoi dong truoc
     depends_on: [loki]
 
 volumes:
   loki_data:
-  promtail_data:
+  alloy_data:
